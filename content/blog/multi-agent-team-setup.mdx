@@ -1,0 +1,391 @@
+---
+title: "Setting Up a Multi-Agent Team in OpenClaw"
+description: "How to configure a team of specialized sub-agents — a coder, researcher, writer, and data agent — with model selection, delegation, shared memory, and when to use each."
+date: "2026-02-14"
+category: "agent-setup"
+featured: false
+tags: ["multi-agent", "agents", "configuration", "advanced"]
+---
+
+# Setting Up a Multi-Agent Team in OpenClaw
+
+A single Claude agent is useful. A coordinated team of specialized agents is transformative.
+
+The idea: instead of one generalist agent trying to do everything, you have specialized agents that are deeply configured for specific tasks — and a main orchestrator that delegates to them intelligently. The coder agent has deep programming context. The researcher knows which sources to trust. The writer has your brand voice baked in.
+
+This guide walks through setting up a four-agent team with real config files and delegation logic.
+
+## The Team Architecture
+
+We'll build:
+
+- **Main** (Claude Sonnet 4-5) — the orchestrator. Handles user conversations and delegates to specialists
+- **Coder** (Claude Sonnet 4-5) — handles code generation, debugging, code review
+- **Researcher** (Perplexity Sonar) — real-time web research and fact-checking
+- **Writer** (Claude Sonnet 4-5) — long-form writing, editing, brand-consistent content
+- **Data** (Ollama / Llama 3.3 70B) — data analysis, SQL, CSV processing — zero API cost
+
+## Folder Structure
+
+```
+~/openclaw-workspace/
+├── config/
+│   └── openclaw.config.json
+├── agents/
+│   ├── main/
+│   │   ├── system-prompt.md
+│   │   ├── memory.md
+│   │   └── HEARTBEAT.md
+│   ├── coder/
+│   │   ├── system-prompt.md
+│   │   ├── memory.md      ← Shared code context
+│   │   └── HEARTBEAT.md
+│   ├── researcher/
+│   │   ├── system-prompt.md
+│   │   ├── sources.md     ← Trusted source list
+│   │   └── HEARTBEAT.md
+│   ├── writer/
+│   │   ├── system-prompt.md
+│   │   ├── style-guide.md ← Brand voice/tone rules
+│   │   └── HEARTBEAT.md
+│   └── data/
+│       ├── system-prompt.md
+│       └── HEARTBEAT.md
+└── shared/
+    └── project-context.md ← Shared across all agents
+```
+
+## The Main Config File
+
+Here's the full `openclaw.config.json`:
+
+```json
+{
+  "agents": [
+    {
+      "id": "main",
+      "name": "Main Orchestrator",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "systemPrompt": "agents/main/system-prompt.md",
+      "memory": "agents/main/memory.md",
+      "sharedContext": ["shared/project-context.md"],
+      "channels": ["discord", "telegram", "imessage"],
+      "subAgents": ["coder", "researcher", "writer", "data"],
+      "delegation": {
+        "auto": true,
+        "confidenceThreshold": 0.7
+      }
+    },
+    {
+      "id": "coder",
+      "name": "Coder Agent",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "systemPrompt": "agents/coder/system-prompt.md",
+      "memory": "agents/coder/memory.md",
+      "sharedContext": ["shared/project-context.md"],
+      "channels": [],
+      "maxTokens": 4000,
+      "tools": ["read_file", "write_file", "run_command"]
+    },
+    {
+      "id": "researcher",
+      "name": "Research Agent",
+      "model": "sonar-pro",
+      "provider": "perplexity",
+      "systemPrompt": "agents/researcher/system-prompt.md",
+      "memory": "agents/researcher/sources.md",
+      "channels": [],
+      "searchMode": "web",
+      "maxResults": 5
+    },
+    {
+      "id": "writer",
+      "name": "Writer Agent",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "systemPrompt": "agents/writer/system-prompt.md",
+      "memory": "agents/writer/style-guide.md",
+      "sharedContext": ["shared/project-context.md"],
+      "channels": [],
+      "maxTokens": 8000
+    },
+    {
+      "id": "data",
+      "name": "Data Agent",
+      "model": "llama3.3:70b",
+      "provider": "ollama",
+      "ollamaHost": "http://localhost:11434",
+      "systemPrompt": "agents/data/system-prompt.md",
+      "channels": [],
+      "tools": ["read_file", "run_python"]
+    }
+  ],
+  "channels": {
+    "discord": {
+      "token": "${DISCORD_BOT_TOKEN}",
+      "guildId": "${DISCORD_GUILD_ID}",
+      "channels": {
+        "general": "${DISCORD_GENERAL_CHANNEL_ID}",
+        "coding": "${DISCORD_CODING_CHANNEL_ID}"
+      }
+    },
+    "telegram": {
+      "token": "${TELEGRAM_BOT_TOKEN}"
+    },
+    "imessage": {
+      "allowedContacts": ["${MY_PHONE_NUMBER}"],
+      "pollIntervalMs": 3000
+    }
+  }
+}
+```
+
+## System Prompts for Each Agent
+
+### Main Orchestrator System Prompt
+
+```markdown
+## Role
+You are the main orchestrator for a team of specialized AI agents.
+Your job: understand user requests and either handle them directly
+OR delegate to the appropriate specialist.
+
+## Team
+- **coder**: Code generation, debugging, review, architecture decisions
+- **researcher**: Real-time web research, fact-checking, current events
+- **writer**: Long-form writing, editing, drafts, blog posts, emails
+- **data**: Data analysis, CSV/spreadsheet work, SQL queries, statistics
+
+## Delegation Rules
+Delegate when:
+- Code question → coder (unless it's a quick 1-liner)
+- Research needed → researcher (any fact that might have changed in 2025+)
+- Writing > 300 words → writer
+- Data/spreadsheet work → data
+
+Handle directly:
+- Conversation and general chat
+- Quick answers you're confident about
+- Task planning and coordination
+- Synthesizing results from multiple agents
+
+## How to Delegate
+Use this format to delegate:
+→ DELEGATE [agent_id]: [clear task description with all context needed]
+
+The result will be returned to you. Synthesize it for the user — don't
+just paste the raw output unless it's code.
+
+## Context
+Read shared/project-context.md for current project status.
+Read memory.md for user preferences and ongoing context.
+```
+
+### Coder Agent System Prompt
+
+```markdown
+## Role
+You are an expert software engineer. You write clean, production-ready code.
+
+## Defaults
+- Language: TypeScript unless specified otherwise
+- Style: Functional, minimal abstractions, explicit types
+- Comments: Only where non-obvious
+- Error handling: Always handle errors explicitly
+
+## When Writing Code
+- Think through edge cases before writing
+- Provide the complete file, not fragments, unless asked for a snippet
+- For complex functions, add a 1-line comment explaining the intent
+- Prefer standard library solutions over third-party packages
+
+## Context Files
+- Read memory.md for codebase patterns and conventions
+- Read shared/project-context.md for current project tech stack
+
+## Output Format
+Always wrap code in proper markdown code blocks with language specified.
+After the code, add a brief "What this does" section if non-trivial.
+```
+
+### Researcher Agent System Prompt
+
+```markdown
+## Role
+You are a research specialist. You find accurate, current information.
+
+## Research Standards
+- Always cite sources with URLs
+- Note the date of information when recency matters
+- Flag conflicting information rather than choosing one source
+- Distinguish between primary sources and commentary
+
+## Trusted Source Hierarchy
+1. Official documentation, government sources, peer-reviewed papers
+2. Established news outlets (Reuters, AP, major papers)
+3. Industry publications and expert blogs
+4. Community sources (with verification)
+
+## Output Format
+Structured findings:
+- Key findings (bullets)
+- Sources (with dates)
+- Confidence level (High / Medium / Low)
+- Caveats or conflicting info (if any)
+```
+
+### Writer Agent System Prompt
+
+```markdown
+## Role
+You are an expert writer who produces clear, engaging content.
+
+## Writing Philosophy
+- Say it once, say it well
+- Concrete over abstract
+- Active voice
+- Short sentences for key points, longer for nuance
+- No filler phrases ("It's worth noting that...", "In conclusion...")
+
+## Style Guide
+Read style-guide.md for brand-specific rules.
+
+## Formats
+- Blog posts: h2 headers, short paragraphs, practical examples
+- Emails: Subject line quality matters. 3-5 paragraphs max.
+- Reports: Executive summary first, details below
+- Social: Hook in first line, no hashtags unless requested
+
+## Output
+Always write the complete piece, not an outline, unless an outline is
+specifically requested. Offer one revision based on feedback.
+```
+
+## How Delegation Works in Practice
+
+When you message your main agent, it analyzes the request and decides whether to handle it directly or pass it to a specialist. Here's what that looks like:
+
+**User**: "Can you help me debug this TypeScript error? I'm getting 'Type X is not assignable to type Y' on line 47 of my auth service."
+
+**Main agent** (thinking): Code debugging → delegate to coder
+
+**Main delegates**: `→ DELEGATE coder: Debug TypeScript error — "Type X is not assignable to type Y" on line 47 of auth service. [pastes code context]`
+
+**Coder responds**: Analysis with specific fix
+
+**Main to user**: "The coder found the issue — you're passing a `User | null` type where only `User` is expected. Here's the fix: [synthesized explanation + code]"
+
+The user gets a clean response without seeing the internal delegation.
+
+## Setting Up Shared Memory
+
+The `shared/project-context.md` file is accessible to all agents. Keep it focused on what every agent needs to know:
+
+```markdown
+## Project: theclawtips.com
+
+**Stack**: Next.js 15, TypeScript, Tailwind CSS, MDX
+**Status**: Active development
+**Deploy target**: Vercel static export → CDN
+
+## Current Sprint
+- Building blog system with MDX
+- Setting up sitemap generation
+- Target: Passing build by EOW
+
+## Key Decisions
+- Static export (no server-side rendering)
+- MDX for content (not CMS)
+- No database — all file-based
+
+## Conventions
+- TypeScript strict mode
+- All components in src/components/
+- Content in content/blog/
+- Utility functions in src/lib/
+
+## Team
+- Main user: Alex
+- No other humans on the project
+```
+
+Update this file when project context changes. Every agent will see the updated context on their next call.
+
+## Model Selection: When to Use What
+
+### For the Coder Agent: Claude Sonnet 4-5
+
+Sonnet is the best balance of code quality and cost. Opus gives slightly better reasoning on very complex architecture questions but at 5x the cost. For day-to-day coding, Sonnet is the right call.
+
+**Don't use**: GPT-4o mini, Haiku for complex coding. They introduce subtle bugs that cost more to fix than you saved.
+
+### For the Researcher Agent: Perplexity Sonar Pro
+
+Perplexity is specialized for search — it retrieves current web information as part of its inference. Trying to use Claude for research means Claude is working from its training cutoff. For anything where recency matters, Perplexity is the right tool.
+
+**Cost**: Sonar Pro is ~$5 per 1,000 searches. If your researcher agent runs 20 searches/day, that's ~$3/month. Cheap.
+
+### For the Writer Agent: Claude Sonnet 4-5
+
+Writing benefits from Sonnet's quality. This is where longer context windows matter — blog posts, reports, and email drafts all benefit from the 200k context window that lets the agent see your entire style guide and example pieces.
+
+### For the Data Agent: Ollama (Local)
+
+Data analysis — parsing CSVs, running SQL queries, describing datasets — doesn't require the latest frontier model. A 70B model running locally on your Mac handles this well and costs nothing per call.
+
+Setup:
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull the model (one-time, ~40GB download)
+ollama pull llama3.3:70b
+
+# Verify it's running
+ollama run llama3.3:70b "Hello, are you ready?"
+```
+
+## Starting the Full Team
+
+```bash
+openclaw start --all
+```
+
+Or start individual agents:
+
+```bash
+openclaw start --agent main &
+openclaw start --agent coder &
+openclaw start --agent researcher &
+openclaw start --agent writer &
+openclaw start --agent data &
+```
+
+Check all agent statuses:
+
+```bash
+openclaw status
+# main       ● running  (4h 23m)
+# coder      ● running  (4h 23m)
+# researcher ● running  (4h 22m)
+# writer     ● running  (4h 21m)
+# data       ● running  (4h 20m)
+```
+
+## Common Issues
+
+**Delegation loop**: Main agent delegates to coder, coder tries to delegate back. Fix: add `"canDelegate": false` to sub-agent configs.
+
+**Context explosion**: Passing too much context to sub-agents inflates costs. Send only what the agent needs for the specific task, not the full conversation history.
+
+**Ollama latency**: Local 70B models are slower than API models. Expect 10-30 seconds for complex data queries. Set user expectations in your main agent's system prompt: "Data analysis may take 15-30 seconds."
+
+**Perplexity rate limits**: Sonar Pro has rate limits on concurrent requests. If you hit them, add a small delay between research calls in your delegation logic.
+
+## The Real Benefit
+
+The power of multi-agent teams isn't raw capability — any single frontier model can do most of what these specialized agents do. The power is **optimization**: each agent has exactly the right context, the right model, and the right constraints for its job. Your coder never has to wade through brand style guides. Your writer never sees code. Your data agent never pays API costs.
+
+The result is faster responses, lower costs, and agents that are genuinely better at their specific jobs than a single generalist would be.

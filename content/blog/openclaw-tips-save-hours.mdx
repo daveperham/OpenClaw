@@ -1,0 +1,455 @@
+---
+title: "5 OpenClaw Tips That Save Hours Every Week"
+description: "Five battle-tested techniques for OpenClaw power users: HEARTBEAT monitoring, launchd auto-restart, voice model tuning, reverse prompting, and smart memory management."
+date: "2026-02-28"
+category: "tips-and-tricks"
+featured: false
+tags: ["tips", "productivity", "advanced", "workflow"]
+---
+
+# 5 OpenClaw Tips That Save Hours Every Week
+
+After running OpenClaw agents for over a year, I've developed a set of practices that dramatically reduce the friction of working with AI agents daily. These aren't surface-level config tweaks — they're the changes that actually show up in your productivity.
+
+Here are five tips that collectively save me several hours per week.
+
+---
+
+## Tip 1: HEARTBEAT.md Files for Zero-Blind-Spot Monitoring
+
+The biggest pain with long-running agents is not knowing when they've silently died. The agent stops responding, you assume it's thinking, you wait — and only after 10 minutes do you check and realize it crashed 45 minutes ago.
+
+The solution: OpenClaw's HEARTBEAT.md pattern.
+
+Every 30 seconds, your agent writes a timestamp to `HEARTBEAT.md`. If the timestamp is stale, the agent is down. This lets you build monitoring without any external services.
+
+Here's the full HEARTBEAT.md format I use:
+
+```markdown
+## Agent Heartbeat
+
+**Agent**: main
+**Status**: running
+**Last Beat**: 2026-02-28T09:23:45.123Z
+**Beat Count**: 12,847
+**Uptime**: 2d 4h 17m
+**Messages Today**: 34
+**Tokens Today**: 28,441
+**Cost Today**: $0.61
+**Last Message**: 2026-02-28T09:18:32.000Z
+**Last Channel**: telegram
+**Queue Depth**: 0
+**Errors Today**: 0
+```
+
+To monitor this from the command line:
+
+```bash
+# Watch the heartbeat live (updates every 5s)
+watch -n 5 'cat ~/openclaw-workspace/agents/main/HEARTBEAT.md'
+
+# Alert when agent is stale (last beat > 90 seconds ago)
+check_agent() {
+  local beat_time=$(grep "Last Beat" ~/openclaw-workspace/agents/main/HEARTBEAT.md | \
+    awk '{print $4}')
+  local beat_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" \
+    "${beat_time%.*}" +%s 2>/dev/null || echo 0)
+  local now_epoch=$(date +%s)
+  local diff=$((now_epoch - beat_epoch))
+
+  if [ $diff -gt 90 ]; then
+    osascript -e "display notification \"Agent main is down!\" with title \"OpenClaw Alert\""
+    echo "ALERT: main agent stale by ${diff}s"
+  fi
+}
+
+# Run this check every minute via cron
+# Add to crontab: * * * * * /path/to/check-agent.sh
+```
+
+For a multi-agent setup, I have a simple shell script that checks all agents and posts to a Discord webhook if any are stale:
+
+```bash
+#!/bin/bash
+WORKSPACE="$HOME/openclaw-workspace"
+WEBHOOK="${DISCORD_ALERT_WEBHOOK}"
+AGENTS=("main" "coder" "researcher" "writer")
+NOW=$(date +%s)
+ALERTS=()
+
+for agent in "${AGENTS[@]}"; do
+  HEARTBEAT="$WORKSPACE/agents/$agent/HEARTBEAT.md"
+  if [ ! -f "$HEARTBEAT" ]; then
+    ALERTS+=("$agent: no heartbeat file")
+    continue
+  fi
+
+  LAST_BEAT=$(grep "Last Beat" "$HEARTBEAT" | awk '{print $4}' | cut -d. -f1)
+  BEAT_TS=$(date -j -f "%Y-%m-%dT%H:%M:%S" "$LAST_BEAT" +%s 2>/dev/null || echo 0)
+  DIFF=$((NOW - BEAT_TS))
+
+  if [ $DIFF -gt 90 ]; then
+    ALERTS+=("$agent: stale for ${DIFF}s")
+  fi
+done
+
+if [ ${#ALERTS[@]} -gt 0 ]; then
+  MSG="🚨 OpenClaw Alert:\n$(printf '%s\n' "${ALERTS[@]}")"
+  curl -s -H "Content-Type: application/json" \
+    -d "{\"content\": \"$MSG\"}" \
+    "$WEBHOOK"
+fi
+```
+
+Run this every minute via cron and you'll never not know your agent is down.
+
+**Time saved**: Catching crashed agents quickly means no more 45-minute dead zones where you thought your agent was working but wasn't.
+
+---
+
+## Tip 2: launchd Keepalive on macOS to Auto-Restart Agents
+
+Manually restarting agents after crashes is a chore. macOS launchd can monitor your agent processes and restart them automatically within seconds of a crash.
+
+Here's the optimal launchd plist I use:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.openclaw.main</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/openclaw</string>
+    <string>start</string>
+    <string>--agent</string>
+    <string>main</string>
+    <string>--workspace</string>
+    <string>/Users/your-user/openclaw-workspace</string>
+  </array>
+
+  <!-- Load environment from .env file -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>ANTHROPIC_API_KEY</key>
+    <string>YOUR_KEY_HERE</string>
+    <key>HOME</key>
+    <string>/Users/your-user</string>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/your-user/openclaw-workspace</string>
+
+  <!-- Run at load and stay running -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Throttle rapid restart loops -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <!-- Logs -->
+  <key>StandardOutPath</key>
+  <string>/tmp/openclaw-main.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/openclaw-main-error.log</string>
+</dict>
+</plist>
+```
+
+Save this to `~/Library/LaunchAgents/com.openclaw.main.plist`, then load it:
+
+```bash
+launchctl load ~/Library/LaunchAgents/com.openclaw.main.plist
+
+# Verify it's running
+launchctl list | grep openclaw
+# Should show: 12345  0  com.openclaw.main
+```
+
+The `ThrottleInterval: 10` key is important — it prevents a tight crash loop from hammering your API with broken requests. If the agent crashes, launchd waits 10 seconds before restarting it.
+
+**For multiple agents**, create one plist per agent with unique labels: `com.openclaw.coder`, `com.openclaw.researcher`, etc.
+
+Useful management commands:
+
+```bash
+# Stop an agent
+launchctl stop com.openclaw.main
+
+# Restart an agent
+launchctl stop com.openclaw.main && launchctl start com.openclaw.main
+
+# Check all openclaw agents
+launchctl list | grep openclaw
+
+# View logs
+tail -f /tmp/openclaw-main.log
+tail -f /tmp/openclaw-main-error.log
+```
+
+**Time saved**: Eliminates the overhead of manually restarting agents after crashes, macOS updates, or laptop reboots. Agents that were down for 2+ hours now restart in under 30 seconds.
+
+---
+
+## Tip 3: Voice Model Selection for Different Use Cases
+
+If you're using OpenClaw with Twilio voice calls, model selection matters more than anywhere else. The wrong model makes voice interactions feel awful; the right one feels surprisingly natural.
+
+### The Problem with Standard Models for Voice
+
+Claude Sonnet's responses are optimized for reading. They use markdown formatting, numbered lists, multi-paragraph structure. Read out loud by a TTS voice, this sounds terrible:
+
+> "There are several approaches you could consider: **First**, you could...\n\n## Option A\n..."
+
+The TTS system reads the asterisks, the hash symbols, and each newline becomes an awkward pause.
+
+### Voice-Optimized System Prompt
+
+Add a voice-specific system prompt section:
+
+```markdown
+## Voice Mode Rules
+When responding to a voice call (channel = "voice"):
+- Speak in natural, conversational sentences
+- NEVER use markdown formatting (no **, no #, no -, no bullet points)
+- Keep responses under 60 words unless more detail was explicitly requested
+- Use "First", "Second", "And" instead of numbered lists
+- Speak numbers as words: "forty-seven" not "47"
+- End with a natural question or invitation to continue
+- No URLs or technical strings unless the user can write them down
+```
+
+### Model Configuration for Voice
+
+```json
+{
+  "channelOverrides": {
+    "voice": {
+      "model": "claude-haiku-4-5",
+      "maxTokens": 150,
+      "temperature": 0.7,
+      "systemPromptAddons": ["voice-mode.md"]
+    }
+  }
+}
+```
+
+Using Haiku for voice has two benefits: it's 4x cheaper per token, and it's faster — lower latency means less awkward silence after the caller speaks.
+
+### TTS Voice Selection
+
+OpenClaw supports multiple TTS providers. In Twilio's case, use Amazon Polly neural voices, not the basic Twilio voices:
+
+```json
+{
+  "voice": {
+    "tts": {
+      "provider": "amazon-polly",
+      "voice": "Matthew",
+      "engine": "neural",
+      "language": "en-US"
+    }
+  }
+}
+```
+
+Neural voices are dramatically more natural. The quality difference between basic Twilio TTS and Amazon Polly Neural is enough to change whether people stay on the call.
+
+### Voice-to-Text Tuning
+
+For inbound voice, Twilio transcribes speech before sending it to your agent. Improve accuracy with custom vocabulary:
+
+```json
+{
+  "voice": {
+    "stt": {
+      "provider": "twilio",
+      "speechTimeout": 3,
+      "hints": ["OpenClaw", "Anthropic", "Claude", "workspace", "heartbeat"]
+    }
+  }
+}
+```
+
+Adding your custom terms to `hints` significantly improves transcription accuracy for technical vocabulary.
+
+**Time saved**: Properly configured voice saves 30+ seconds per call by eliminating the need to repeat yourself when TTS reads markdown out loud or cuts out at the wrong moment.
+
+---
+
+## Tip 4: Reverse Prompting to Get Agents to Ask Clarifying Questions
+
+Most people configure agents that jump straight to answers. This sounds efficient but actually produces worse results and more follow-up messages.
+
+The better approach: train your agent to ask one clarifying question before attempting complex tasks.
+
+### The Reverse Prompt Technique
+
+Add this to your main system prompt:
+
+```markdown
+## Clarifying Questions
+Before attempting any task that is:
+- Ambiguous in scope (could be a 1-sentence answer or a full document)
+- Requires assumptions about format, audience, or depth
+- Involves a decision with multiple valid options
+- Could go wrong in a way that wastes significant time to undo
+
+...ask ONE specific clarifying question first.
+
+Do NOT ask obvious questions. Do NOT ask multiple questions at once.
+Ask the single most important question that would most change your approach.
+
+Good: "Should this be a formal email or a casual message?"
+Bad: "Can you clarify what you mean by this task?"
+Bad: "What format do you want? What length? What audience? What tone?"
+```
+
+### Why One Question Beats Jumping Ahead
+
+When I ask "write me a blog post about cost optimization," my agent now asks:
+
+> "Are you targeting technical readers who want specific numbers, or business decision-makers looking for a strategic overview?"
+
+My answer completely changes the output. Without this question, I'd get a mediocre post that's neither, spend 20 minutes editing, and possibly ask for a full rewrite.
+
+One question → better output → less editing → net time saved.
+
+### Calibrating When to Ask
+
+The trick is calibrating the threshold. You don't want the agent asking for clarification on "what's the weather like in NYC?" You do want it asking before writing a 2,000-word report.
+
+Teach it the threshold with examples in your system prompt:
+
+```markdown
+## When NOT to ask clarifying questions
+- Simple factual lookups: "What's the capital of France?"
+- Quick calculations: "Convert 250 USD to EUR"
+- Short responses (under 100 words clearly sufficient)
+- When you've done this exact task recently and can infer context
+
+## When to ask
+- Writing tasks over 200 words
+- Code with multiple possible approaches
+- Analysis that could go deep or stay shallow
+- Any task where the user might be unhappy with a reasonable default
+```
+
+**Time saved**: One clarifying question at the start of a complex task typically saves 2-3 rounds of revision. On 5-10 complex tasks per week, that's 30-60 minutes recovered.
+
+---
+
+## Tip 5: Memory Management with Workspace Files
+
+Your agent's memory.md file starts as a blank slate and grows over time. Without deliberate management, it becomes a mess of outdated notes, redundant entries, and stale context — all of which costs you money on every API call.
+
+### The Problem
+
+After 3 months, a typical memory.md looks like:
+
+- User prefers TypeScript *(added month 1)*
+- User is building a todo app *(added month 1 — project finished month 2)*
+- Current project: theclawtips.com *(added month 2)*
+- User is building theclawtips.com — a Next.js site *(added month 3, duplicate)*
+- User prefers TypeScript and uses strict mode *(added month 3, duplicate of first entry)*
+
+This 5,000-token file could be 1,500 tokens with proper management.
+
+### The Weekly Memory Review
+
+Every Sunday, I run a memory audit. I paste my current memory.md to my agent with this prompt:
+
+```
+Audit my memory.md file:
+1. Remove duplicates (keep the most recent/complete version)
+2. Remove completed projects (archive them to memory-archive.md)
+3. Condense verbose entries to their essential facts
+4. Flag any entries that might be outdated (I'll confirm)
+5. Output the compressed version
+
+Target: under 2,000 tokens for active memory.
+```
+
+This typically compresses 4,000-6,000 tokens down to 1,200-2,000.
+
+### Tiered Memory Architecture
+
+For larger workflows, use a tiered memory system:
+
+```
+agents/main/
+├── memory.md          ← Active context (under 2,000 tokens)
+├── memory-archive.md  ← Completed projects, old context (for reference)
+└── memory-projects/
+    ├── theclawtips.md ← Per-project deep context
+    └── finance-app.md ← Loaded only when relevant
+```
+
+Configure your agent to load project-specific memory when the topic comes up:
+
+```markdown
+## Memory Loading Rules
+- Always load: memory.md (active context)
+- Load when topic matches: memory-projects/[project-name].md
+- Available archives: memory-archive.md (ask user before loading)
+```
+
+### Real-Time Memory Updates
+
+Rather than waiting for the weekly audit, train your agent to maintain memory quality as it writes:
+
+```markdown
+## When Updating Memory
+- Check for duplicates before adding new entries
+- If updating an existing entry, replace it (don't add alongside)
+- Mark project entries with status: [ACTIVE] or [COMPLETED]
+- Include the date when adding time-sensitive context
+- Keep individual entries under 50 words
+```
+
+### Memory Templates
+
+Give your agent a template to structure new entries consistently:
+
+```markdown
+## Memory Entry Format
+
+### Projects
+- [PROJECT NAME] [ACTIVE/COMPLETED]: Brief description. Tech stack. Key context.
+  Last updated: YYYY-MM-DD
+
+### Preferences
+- [Category]: [Preference]. [Why, if helpful].
+
+### Ongoing Context
+- [Topic]: [Current status/context]. Updated: YYYY-MM-DD.
+```
+
+Consistent format makes it easier to scan and audit memory, and tends to produce more token-efficient entries.
+
+**Time saved**: A 3,000-token reduction in memory.md saves about $4.50/month at Sonnet pricing — but the bigger win is agent quality. Clean, current memory produces better responses because the agent isn't confused by outdated or contradictory context.
+
+---
+
+## Putting It Together
+
+These five tips work best in combination:
+
+1. **HEARTBEAT monitoring** tells you when agents need attention
+2. **launchd keepalive** ensures they restart automatically when they fail
+3. **Voice model tuning** makes phone interactions actually pleasant
+4. **Reverse prompting** front-loads clarification to reduce revision loops
+5. **Memory management** keeps costs down and response quality up
+
+Start with whichever one addresses your biggest current friction point. My recommendation: if you're losing time to crashed agents, implement the HEARTBEAT + launchd combo first. If your agent's responses feel off or imprecise, start with memory management. The improvements are immediate and concrete.
+
+The underlying theme across all five: **be deliberate about configuration**. OpenClaw's defaults are reasonable, but they're not optimized for your specific workflow. The more intentional you are about how your agents behave, the more value you extract from them.

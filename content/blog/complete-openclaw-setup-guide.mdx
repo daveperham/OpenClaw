@@ -1,0 +1,357 @@
+---
+title: "Complete OpenClaw Setup Guide 2026"
+description: "A comprehensive walkthrough of installing OpenClaw, connecting messaging channels, configuring your first AI agent, and running your first conversation — with real commands and config examples."
+date: "2026-01-15"
+category: "getting-started"
+featured: true
+tags: ["openclaw", "setup", "installation", "getting-started"]
+---
+
+# Complete OpenClaw Setup Guide 2026
+
+OpenClaw is an AI agent orchestration platform that lets you run persistent, multi-channel AI agents from your own machine or server. Unlike hosted chatbots, OpenClaw agents live in your workspace, maintain memory across conversations, and can be connected to WhatsApp, Discord, Telegram, iMessage, and voice channels — all simultaneously.
+
+This guide covers everything you need to get a working OpenClaw agent up and running in 2026.
+
+## What Is OpenClaw?
+
+OpenClaw is built around a few core ideas:
+
+- **Persistent agents**: Your agents run continuously, not just on-demand. They maintain context between conversations using workspace files and memory.
+- **Multi-channel presence**: One agent can handle messages from multiple channels at once — a WhatsApp message and a Discord DM can both land in the same agent's inbox.
+- **Model-agnostic**: OpenClaw supports Claude (Anthropic), GPT-4o (OpenAI), Gemini, and local models via Ollama. You pick the brain for each agent.
+- **Local-first**: Your conversations, memory files, and configs stay on your machine. You control the data.
+
+## Prerequisites
+
+Before you start, make sure you have:
+
+- macOS 13+ or Ubuntu 22.04+ (Windows via WSL2 works but isn't officially supported)
+- Node.js 20+ installed (`node --version` to check)
+- Python 3.11+ (for the Python SDK variant)
+- At minimum one AI API key: Anthropic or OpenAI
+- Git installed
+
+## Step 1: Install OpenClaw
+
+OpenClaw is installed via npm:
+
+```bash
+npm install -g @openclaw/cli
+```
+
+Verify the install:
+
+```bash
+openclaw --version
+# openclaw 2.4.1
+```
+
+Create your first workspace directory:
+
+```bash
+mkdir ~/openclaw-workspace
+cd ~/openclaw-workspace
+openclaw init
+```
+
+The `init` command creates this folder structure:
+
+```
+~/openclaw-workspace/
+├── agents/
+│   └── main/
+│       ├── system-prompt.md
+│       ├── memory.md
+│       └── HEARTBEAT.md
+├── config/
+│   └── openclaw.config.json
+├── logs/
+└── channels/
+```
+
+## Step 2: Configure Your First Agent
+
+Open `config/openclaw.config.json`. The default config looks like this:
+
+```json
+{
+  "agents": [
+    {
+      "id": "main",
+      "name": "Main Agent",
+      "model": "claude-sonnet-4-5",
+      "provider": "anthropic",
+      "channels": [],
+      "systemPrompt": "agents/main/system-prompt.md",
+      "memory": "agents/main/memory.md",
+      "heartbeat": "agents/main/HEARTBEAT.md"
+    }
+  ],
+  "settings": {
+    "logLevel": "info",
+    "timezone": "America/New_York"
+  }
+}
+```
+
+Edit `agents/main/system-prompt.md` to define your agent's personality and capabilities:
+
+```markdown
+You are a helpful AI assistant running via OpenClaw. You have access to memory
+stored in memory.md and can update it when the user gives you new information
+to remember.
+
+Your core behaviors:
+- Be concise and direct. Don't pad responses.
+- When asked to remember something, update memory.md immediately.
+- When you're unsure, say so and ask a clarifying question.
+- Use markdown formatting when it helps readability.
+
+Current user context:
+[Read memory.md for user-specific context]
+```
+
+## Step 3: Set Up API Keys
+
+Add your API keys to a `.env` file in your workspace root:
+
+```bash
+# .env
+ANTHROPIC_API_KEY=sk-ant-api03-...
+OPENAI_API_KEY=sk-proj-...
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+1...
+```
+
+Load the env file into your shell session:
+
+```bash
+source .env
+# Or permanently in ~/.zshrc:
+echo 'source ~/openclaw-workspace/.env' >> ~/.zshrc
+```
+
+## Step 4: Connect WhatsApp via Twilio
+
+WhatsApp integration uses Twilio's WhatsApp Business API sandbox for testing, or a verified number for production.
+
+### Sandbox Setup (Testing)
+
+1. Go to [console.twilio.com](https://console.twilio.com) and find the WhatsApp sandbox
+2. Follow the sandbox join instructions (send a WhatsApp message to the Twilio sandbox number)
+3. Set your webhook URL — you'll need a public URL. Use ngrok for local development:
+
+```bash
+npx ngrok http 3001
+# Forwarding: https://abc123.ngrok.io -> localhost:3001
+```
+
+4. In the Twilio console, set the "When a message comes in" webhook to:
+   `https://abc123.ngrok.io/webhooks/whatsapp`
+
+Add WhatsApp to your agent config:
+
+```json
+{
+  "channels": [
+    {
+      "type": "whatsapp",
+      "provider": "twilio",
+      "webhookPath": "/webhooks/whatsapp",
+      "port": 3001
+    }
+  ]
+}
+```
+
+### Production Setup
+
+For production, you'll need a Twilio WhatsApp-approved number ($1,000 deposit) or use the Business API through a BSP (Business Solution Provider). Most OpenClaw users start with sandbox testing and graduate to iMessage or Discord for personal use.
+
+## Step 5: Connect Discord
+
+Discord is the easiest channel to set up. Create a Discord bot:
+
+1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
+2. Create a new application, then click "Bot" in the sidebar
+3. Click "Reset Token" and copy the bot token
+4. Under "OAuth2 > URL Generator", select `bot` scope and these permissions: `Send Messages`, `Read Message History`, `View Channels`
+5. Invite the bot to your server using the generated URL
+
+Add your Discord token to `.env`:
+
+```bash
+DISCORD_BOT_TOKEN=MTI...
+DISCORD_GUILD_ID=12345678901234567
+DISCORD_CHANNEL_ID=12345678901234567
+```
+
+Add Discord to your agent config:
+
+```json
+{
+  "channels": [
+    {
+      "type": "discord",
+      "token": "${DISCORD_BOT_TOKEN}",
+      "guildId": "${DISCORD_GUILD_ID}",
+      "channelId": "${DISCORD_CHANNEL_ID}"
+    }
+  ]
+}
+```
+
+## Step 6: Connect Telegram
+
+Telegram bots are simpler than Discord — no server needed.
+
+1. Message [@BotFather](https://t.me/BotFather) on Telegram
+2. Send `/newbot` and follow the prompts
+3. Copy the API token (looks like `123456:ABC-DEF...`)
+
+Add to `.env`:
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+```
+
+Add to config:
+
+```json
+{
+  "channels": [
+    {
+      "type": "telegram",
+      "token": "${TELEGRAM_BOT_TOKEN}"
+    }
+  ]
+}
+```
+
+## Step 7: Connect iMessage (macOS Only)
+
+iMessage integration uses Applescript to read and send messages through the Messages app. This requires macOS and granting accessibility permissions.
+
+```json
+{
+  "channels": [
+    {
+      "type": "imessage",
+      "allowedContacts": ["+19175551234", "user@example.com"],
+      "pollIntervalMs": 3000
+    }
+  ]
+}
+```
+
+Grant permissions: Go to **System Settings > Privacy & Security > Accessibility** and add Terminal (or your terminal app) to the allowed list.
+
+## Step 8: Start Your Agent
+
+```bash
+openclaw start --agent main
+```
+
+You'll see output like:
+
+```
+[openclaw] Starting agent: main
+[openclaw] Model: claude-sonnet-4-5 (Anthropic)
+[openclaw] Channels: discord, telegram
+[openclaw] Heartbeat: agents/main/HEARTBEAT.md
+[openclaw] Agent started. Listening for messages...
+```
+
+Test it by sending a message in your connected Discord channel or Telegram chat:
+
+```
+You: Hello, are you there?
+Agent: Yes! I'm running via OpenClaw. How can I help you today?
+```
+
+## Step 9: Configure Memory
+
+The `agents/main/memory.md` file is where your agent stores persistent information. Edit it directly or let the agent update it during conversation.
+
+Example memory.md:
+
+```markdown
+## User Profile
+- Name: Alex
+- Timezone: Pacific (UTC-8)
+- Preferred language: TypeScript
+- Current projects: theclawtips.com site, personal finance tracker
+
+## Preferences
+- Responses should be concise, under 150 words unless detail is needed
+- No unnecessary affirmations ("Great question!")
+- Code examples in TypeScript when possible
+
+## Ongoing Context
+- Working on Next.js 15 site with static export
+- Next milestone: get the build passing
+```
+
+Instruct your agent via system prompt to read memory at the start of each conversation and update it when given new information.
+
+## Step 10: Set Up Auto-Restart with launchd (macOS)
+
+To keep your agent running even after reboots, use launchd:
+
+```bash
+cat > ~/Library/LaunchAgents/com.openclaw.main.plist << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.openclaw.main</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/openclaw</string>
+    <string>start</string>
+    <string>--agent</string>
+    <string>main</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/your-username/openclaw-workspace</string>
+  <key>KeepAlive</key>
+  <true/>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/openclaw-main.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/openclaw-main-error.log</string>
+</dict>
+</plist>
+EOF
+
+launchctl load ~/Library/LaunchAgents/com.openclaw.main.plist
+```
+
+Your agent will now start automatically at login and restart if it crashes.
+
+## Troubleshooting Common Issues
+
+**Agent not responding on Discord**: Check that the bot has proper channel permissions. Go to channel settings > Permissions and ensure the bot role can read and send messages.
+
+**WhatsApp webhook failing**: Ensure ngrok is running and the webhook URL matches. Twilio logs webhook failures in the console under Monitor > Logs.
+
+**Memory not persisting**: Check file permissions on memory.md. The process running openclaw needs write access.
+
+**High latency on first response**: Claude API cold start can take 2-3 seconds. This is normal. Subsequent messages in the same conversation are faster.
+
+## Next Steps
+
+With your agent running and connected, explore:
+
+- **Multi-agent setup**: Run a team of specialized agents (see our multi-agent guide)
+- **Voice integration**: Add phone call handling via Twilio Voice
+- **Dashboard monitoring**: Build a mission control view of your agents
+- **Cost management**: Set up usage alerts to avoid surprise API bills
+
+OpenClaw gets more powerful the more you invest in your agent's memory and system prompt. Spend time refining those two files and you'll see dramatically better responses over time.

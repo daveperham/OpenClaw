@@ -1,0 +1,311 @@
+---
+title: "OpenClaw Cost Breakdown: What You'll Actually Spend in 2026"
+description: "Real numbers on running OpenClaw agents: Claude API pricing, OpenAI costs, Twilio voice, typical monthly bills, and actionable tips to cut costs by 40-60%."
+date: "2026-02-03"
+category: "cost-breakdowns"
+featured: true
+tags: ["cost", "pricing", "budget", "api"]
+---
+
+# OpenClaw Cost Breakdown: What You'll Actually Spend in 2026
+
+Most guides gloss over costs with vague disclaimers. This isn't that guide.
+
+I've been running OpenClaw agents for the past year and I track every dollar. Here's exactly what I spend, what drives those costs, and how I cut my bill by 50% without sacrificing quality.
+
+## The Cost Drivers
+
+Running an OpenClaw agent has three main cost categories:
+
+1. **AI model API calls** — the biggest variable cost
+2. **Messaging infrastructure** — Twilio for voice/SMS/WhatsApp
+3. **Compute** — usually near zero if you're running on a machine you already own
+
+Let's break each down.
+
+---
+
+## AI Model API Pricing (2026 Rates)
+
+### Anthropic Claude
+
+Claude is OpenClaw's default model and the one most users stick with. Current pricing:
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|-------|----------------------|------------------------|
+| Claude Opus 4.5 | $15.00 | $75.00 |
+| Claude Sonnet 4-5 | $3.00 | $15.00 |
+| Claude Haiku 4.5 | $0.80 | $4.00 |
+
+**What this means in practice**: A typical back-and-forth conversation message uses about 1,500-3,000 tokens total (including system prompt, context, and response). At Sonnet pricing, that's roughly $0.004-$0.008 per exchange. Sounds cheap until you're sending 500 messages a day.
+
+### OpenAI
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|-------|----------------------|------------------------|
+| GPT-4o | $2.50 | $10.00 |
+| GPT-4o mini | $0.15 | $0.60 |
+| o3-mini | $1.10 | $4.40 |
+
+GPT-4o mini is remarkably capable for simple routing tasks and costs almost nothing.
+
+### Local Models (Ollama)
+
+Running models locally via Ollama has zero API cost. Relevant models:
+
+- **Llama 3.3 70B**: Requires ~40GB VRAM, matches GPT-4o on many tasks
+- **Mistral 7B**: Runs on 8GB VRAM, good for simple summarization and routing
+- **Phi-4**: 14B model that punches above its weight, great for coding
+
+If you have an M2/M3 Mac with 32GB+ unified memory, running a 30B model locally is genuinely viable for many tasks.
+
+---
+
+## Real Monthly Bills: Three Usage Profiles
+
+### Profile 1: Personal Assistant Agent (Light Use)
+
+**Setup**: One Claude Sonnet agent, Discord + iMessage, ~20 messages/day
+
+```
+Messages per month:  600
+Avg tokens per msg:  2,000
+Total tokens:        1,200,000
+
+Cost breakdown:
+- Input tokens (70%): 840,000 × $3.00/1M  = $2.52
+- Output tokens (30%): 360,000 × $15.00/1M = $5.40
+Monthly API cost:                            $7.92
+
+Twilio: $0 (iMessage is free, Discord is free)
+Compute: $0 (running on existing Mac)
+
+Total monthly: ~$8
+```
+
+This is the "entry level" — a useful AI assistant for under $10/month.
+
+### Profile 2: Active Work Assistant (Moderate Use)
+
+**Setup**: Claude Sonnet as main, one coder sub-agent on Sonnet, Telegram + WhatsApp, ~80 messages/day
+
+```
+Messages per month:  2,400
+Avg tokens per msg:  3,500 (larger context with code)
+Total tokens:        8,400,000
+
+Cost breakdown:
+- Input (70%): 5,880,000 × $3.00/1M  = $17.64
+- Output (30%): 2,520,000 × $15.00/1M = $37.80
+Monthly API cost:                       $55.44
+
+Twilio WhatsApp: $0.005/message × 700 msgs = $3.50
+WhatsApp number rental: $1.00
+Total monthly: ~$60
+```
+
+This is where most serious OpenClaw users land. $60/month for an always-on AI team.
+
+### Profile 3: Heavy Use / Business (Power User)
+
+**Setup**: 4 agents (main, coder, researcher, writer), voice calls via Twilio, 200+ messages/day
+
+```
+Messages per month:  6,000
+Avg tokens per msg:  4,500 (large context, documents)
+Total tokens:        27,000,000
+
+Cost breakdown:
+- Input (65%): 17,550,000 × $3.00/1M  = $52.65
+- Output (35%): 9,450,000 × $15.00/1M  = $141.75
+Monthly API cost:                        $194.40
+
+Voice (Twilio):
+- 10 calls/day × 30 days × 2 min avg × $0.013/min = $7.80
+- Twilio Voice number: $1.00
+
+Total monthly: ~$203
+```
+
+At $200/month, you're essentially employing a 24/7 AI team for less than a part-time human assistant charges for a single day.
+
+---
+
+## The Hidden Cost: Context Window Inflation
+
+Here's what trips up new users: your system prompt + memory file gets sent with **every single message**. If your memory.md grows to 5,000 tokens and your system prompt is 1,000 tokens, that's 6,000 tokens of overhead per request — before the user even says anything.
+
+Over 3,000 messages a month, that's:
+
+```
+6,000 tokens × 3,000 messages = 18,000,000 tokens
+18M input tokens × $3.00/1M = $54/month
+
+Just from context overhead!
+```
+
+**Fix**: Keep your system prompt tight (under 500 tokens) and prune memory.md regularly. Every 500 tokens you remove from your system prompt saves ~$4.50/month at moderate usage.
+
+---
+
+## How Twilio Pricing Works
+
+Twilio has confusing pricing. Here's the simple version:
+
+### SMS
+- Inbound: $0.0075/message
+- Outbound: $0.0079/message
+- Phone number: $1.15/month
+
+### WhatsApp
+- User-initiated conversation (24-hour window): $0.0088
+- Business-initiated message: $0.0147
+- After 24 hours, a new conversation fee applies
+
+### Voice
+- Inbound call: $0.0085/minute
+- Outbound call: $0.013/minute
+- Phone number: $1.15/month
+
+### What's Free
+- iMessage (macOS Applescript): $0
+- Discord: $0
+- Telegram: $0
+
+If cost is a concern, avoid Twilio channels. An OpenClaw agent on Discord + Telegram + iMessage has **zero messaging costs**.
+
+---
+
+## 5 Ways to Cut Your Bill by 40-60%
+
+### 1. Route Simple Tasks to Cheaper Models
+
+Not every message needs Claude Sonnet. A quick lookup or yes/no question works fine with Haiku or GPT-4o mini.
+
+Set up a routing rule in your agent config:
+
+```json
+{
+  "routing": {
+    "default": "claude-sonnet-4-5",
+    "quick": {
+      "model": "claude-haiku-4-5",
+      "maxTokens": 200,
+      "triggers": ["what time", "remind me", "set a timer", "quick question"]
+    }
+  }
+}
+```
+
+Routing 30% of messages to Haiku can cut that 30% of costs by ~75%.
+
+**Savings potential**: 15-25% reduction in total bill.
+
+### 2. Compress Your Memory File
+
+Use a weekly "memory compression" step where you ask your agent to summarize and compress memory.md:
+
+```
+You: Compress memory.md — summarize all facts into the most token-efficient
+format possible, removing any outdated information. Keep all current context
+but use bullet points and abbreviations where meaning is preserved.
+```
+
+This typically reduces a 3,000-token memory file to 1,200 tokens while preserving all relevant context.
+
+**Savings potential**: 10-20% reduction (more with large memory files).
+
+### 3. Use a Shorter System Prompt
+
+Most system prompts are verbose because we write them like essays. Rewrite yours in compressed instruction format:
+
+Instead of:
+```
+You are a helpful AI assistant. Your goal is to help the user
+accomplish their tasks efficiently. Always be polite and professional...
+```
+
+Use:
+```
+Role: Personal AI assistant for Alex
+Tone: Direct, no fluff, markdown when helpful
+Memory: Read memory.md at start, update when asked
+Format: Under 150 words unless detail requested
+```
+
+The second version is ~40 tokens vs ~120 tokens. At scale, that matters.
+
+**Savings potential**: 5-15% depending on current prompt length.
+
+### 4. Set Max Token Limits
+
+Add output token limits to prevent your agent from writing essays when you asked a simple question:
+
+```json
+{
+  "defaultMaxTokens": 500,
+  "channelOverrides": {
+    "voice": { "maxTokens": 150 },
+    "discord": { "maxTokens": 800 }
+  }
+}
+```
+
+Voice especially benefits — a conversational voice response should be under 3 sentences. Limiting to 150 output tokens saves money and makes voice responses actually listenable.
+
+**Savings potential**: 10-30% on output costs.
+
+### 5. Implement Caching for Static Context
+
+If you send the same large document to your agent repeatedly (a product spec, a code file), use Anthropic's prompt caching:
+
+```json
+{
+  "caching": {
+    "enabled": true,
+    "cacheSystemPrompt": true,
+    "cacheLongDocuments": true,
+    "minTokensToCache": 2000
+  }
+}
+```
+
+Cached tokens cost 90% less on re-reads. If your system prompt is 1,500 tokens and you cache it, subsequent reads cost $0.30/1M instead of $3.00/1M.
+
+**Savings potential**: 20-40% if you have static large context.
+
+---
+
+## Is It Worth It?
+
+Let's put the numbers in perspective.
+
+At **Profile 2 usage ($60/month)**, you're getting:
+- 2,400 AI-powered conversations
+- Available 24/7 on your phone
+- Maintains context across all conversations
+- Handles WhatsApp messages while you're sleeping
+
+Compare to alternatives:
+- A mid-tier SaaS AI assistant: $20-40/month, no persistent memory, no API access
+- A basic VA: $500-2,000/month
+- ChatGPT Plus: $20/month but no persistence, no multi-channel, no automation
+
+OpenClaw's value isn't just the AI quality — it's the persistence, the channels, and the fact that you own the whole setup. When you want to add a new capability, you add it. You're not waiting for a feature roadmap.
+
+For most users at $8-60/month, it's an easy yes.
+
+At $200/month for a power user setup, you need to be clear that it's saving you more time than that — but if you're running a business and it's replacing even one hour of human work per week, it's a bargain.
+
+---
+
+## Budget Recommendations by Use Case
+
+| Use Case | Recommended Config | Expected Monthly Cost |
+|----------|-------------------|----------------------|
+| Personal assistant | Sonnet, Discord + iMessage | $8-15 |
+| Developer productivity | Sonnet + Haiku routing | $25-45 |
+| Small team assistant | Sonnet + coder sub-agent | $50-80 |
+| Business operations | 4+ agents, voice, WhatsApp | $150-250 |
+
+Start at the bottom and scale up as you see value. The cost grows linearly with use, and so does the benefit.

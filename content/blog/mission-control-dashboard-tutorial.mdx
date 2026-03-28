@@ -1,0 +1,463 @@
+---
+title: "How to Build a Mission Control Dashboard for Your OpenClaw Agents"
+description: "Step-by-step guide to building a web dashboard to monitor all your OpenClaw agents — status, message logs, heartbeat monitoring, and cost metrics."
+date: "2026-01-22"
+category: "tutorials"
+featured: true
+tags: ["dashboard", "monitoring", "tutorial", "agents"]
+---
+
+# How to Build a Mission Control Dashboard for Your OpenClaw Agents
+
+If you're running more than one OpenClaw agent, things get complicated fast. Which agent is alive? When did it last respond? How much did it cost today? Without visibility into these questions, you're flying blind.
+
+This tutorial walks through building a simple but powerful mission control dashboard using Next.js and the filesystem APIs that OpenClaw exposes natively. No third-party monitoring service required.
+
+## What We're Building
+
+A web dashboard that shows:
+
+- **Agent status**: Is the agent running? When did it last heartbeat?
+- **Recent message log**: Last 20 messages across all agents
+- **Cost tracker**: Daily and monthly spend per agent
+- **Quick actions**: Restart agent, clear memory, view full log
+
+The dashboard reads directly from your OpenClaw workspace files — it doesn't need to talk to the agents at all. This means it works even if an agent crashes.
+
+## Workspace Folder Structure
+
+First, ensure your OpenClaw workspace is organized consistently. The dashboard depends on this structure:
+
+```
+~/openclaw-workspace/
+├── agents/
+│   ├── main/
+│   │   ├── system-prompt.md
+│   │   ├── memory.md
+│   │   ├── HEARTBEAT.md        ← We'll read this
+│   │   └── logs/
+│   │       ├── 2026-01-22.log  ← Message logs
+│   │       └── costs.json      ← Cost tracking
+│   ├── coder/
+│   │   ├── HEARTBEAT.md
+│   │   └── logs/
+│   └── researcher/
+│       ├── HEARTBEAT.md
+│       └── logs/
+└── config/
+    └── openclaw.config.json
+```
+
+## Understanding HEARTBEAT.md Files
+
+OpenClaw writes a timestamp to `HEARTBEAT.md` every 30 seconds while an agent is running. The file looks like this:
+
+```markdown
+## Agent Heartbeat
+
+**Agent**: main
+**Status**: running
+**Last Beat**: 2026-01-22T14:23:45.123Z
+**Uptime**: 4h 23m
+**Messages Today**: 47
+**Tokens Today**: 38,291
+**Cost Today**: $0.82
+```
+
+If the last beat timestamp is more than 60 seconds old, the agent is likely down. This is how we detect crashed agents.
+
+## Step 1: Create the Dashboard App
+
+Create a new Next.js app alongside your workspace:
+
+```bash
+mkdir ~/openclaw-dashboard
+cd ~/openclaw-dashboard
+npx create-next-app@latest . --typescript --tailwind --app --yes
+```
+
+Install dependencies:
+
+```bash
+npm install gray-matter date-fns
+```
+
+## Step 2: Create the Data Layer
+
+Create `lib/agents.ts` to read workspace data:
+
+```typescript
+import fs from 'fs';
+import path from 'path';
+
+const WORKSPACE = process.env.OPENCLAW_WORKSPACE ||
+  path.join(process.env.HOME!, 'openclaw-workspace');
+
+export interface AgentStatus {
+  id: string;
+  name: string;
+  status: 'running' | 'stale' | 'offline';
+  lastBeat: Date | null;
+  uptimeStr: string;
+  messagesToday: number;
+  costToday: number;
+  tokensToday: number;
+}
+
+export function getAgentStatus(agentId: string): AgentStatus {
+  const heartbeatPath = path.join(WORKSPACE, 'agents', agentId, 'HEARTBEAT.md');
+
+  if (!fs.existsSync(heartbeatPath)) {
+    return {
+      id: agentId,
+      name: agentId,
+      status: 'offline',
+      lastBeat: null,
+      uptimeStr: 'N/A',
+      messagesToday: 0,
+      costToday: 0,
+      tokensToday: 0,
+    };
+  }
+
+  const content = fs.readFileSync(heartbeatPath, 'utf-8');
+  const lastBeatMatch = content.match(/\*\*Last Beat\*\*: (.+)/);
+  const messagesMatch = content.match(/\*\*Messages Today\*\*: ([\d,]+)/);
+  const costMatch = content.match(/\*\*Cost Today\*\*: \$([\d.]+)/);
+  const tokensMatch = content.match(/\*\*Tokens Today\*\*: ([\d,]+)/);
+  const uptimeMatch = content.match(/\*\*Uptime\*\*: (.+)/);
+
+  const lastBeat = lastBeatMatch
+    ? new Date(lastBeatMatch[1].trim())
+    : null;
+
+  const now = new Date();
+  const secondsSincebeat = lastBeat
+    ? (now.getTime() - lastBeat.getTime()) / 1000
+    : Infinity;
+
+  let status: AgentStatus['status'] = 'offline';
+  if (secondsSincebeat < 60) status = 'running';
+  else if (secondsSincebeat < 300) status = 'stale';
+
+  return {
+    id: agentId,
+    name: agentId,
+    status,
+    lastBeat,
+    uptimeStr: uptimeMatch ? uptimeMatch[1].trim() : 'Unknown',
+    messagesToday: messagesMatch
+      ? parseInt(messagesMatch[1].replace(',', '')) : 0,
+    costToday: costMatch ? parseFloat(costMatch[1]) : 0,
+    tokensToday: tokensMatch
+      ? parseInt(tokensMatch[1].replace(',', '')) : 0,
+  };
+}
+
+export function getAllAgents(): AgentStatus[] {
+  const agentsDir = path.join(WORKSPACE, 'agents');
+  if (!fs.existsSync(agentsDir)) return [];
+
+  const agentDirs = fs.readdirSync(agentsDir).filter(d =>
+    fs.statSync(path.join(agentsDir, d)).isDirectory()
+  );
+
+  return agentDirs.map(id => getAgentStatus(id));
+}
+```
+
+## Step 3: Build the Log Reader
+
+Create `lib/logs.ts`:
+
+```typescript
+import fs from 'fs';
+import path from 'path';
+
+const WORKSPACE = process.env.OPENCLAW_WORKSPACE ||
+  path.join(process.env.HOME!, 'openclaw-workspace');
+
+export interface LogEntry {
+  timestamp: Date;
+  agentId: string;
+  channel: string;
+  role: 'user' | 'assistant';
+  content: string;
+  tokens?: number;
+  cost?: number;
+}
+
+export function getRecentLogs(agentId: string, limit = 20): LogEntry[] {
+  const logsDir = path.join(WORKSPACE, 'agents', agentId, 'logs');
+  if (!fs.existsSync(logsDir)) return [];
+
+  const today = new Date().toISOString().split('T')[0];
+  const logFile = path.join(logsDir, `${today}.log`);
+
+  if (!fs.existsSync(logFile)) return [];
+
+  const content = fs.readFileSync(logFile, 'utf-8');
+  const lines = content.split('\n').filter(Boolean);
+
+  // Log format: [ISO_TIMESTAMP] [CHANNEL] [ROLE] [TOKENS] MESSAGE
+  return lines
+    .slice(-limit)
+    .map(line => {
+      const match = line.match(
+        /^\[(.+?)\] \[(.+?)\] \[(.+?)\](?: \[(\d+)t \$([\d.]+)\])? (.+)$/
+      );
+      if (!match) return null;
+
+      return {
+        timestamp: new Date(match[1]),
+        agentId,
+        channel: match[2],
+        role: match[3] as 'user' | 'assistant',
+        tokens: match[4] ? parseInt(match[4]) : undefined,
+        cost: match[5] ? parseFloat(match[5]) : undefined,
+        content: match[6],
+      };
+    })
+    .filter(Boolean) as LogEntry[];
+}
+
+export function getRecentLogsAllAgents(limit = 50): LogEntry[] {
+  const agentsDir = path.join(WORKSPACE, 'agents');
+  if (!fs.existsSync(agentsDir)) return [];
+
+  const agents = fs.readdirSync(agentsDir);
+  const allLogs = agents.flatMap(id => getRecentLogs(id, limit));
+
+  return allLogs
+    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    .slice(0, limit);
+}
+```
+
+## Step 4: Build the Dashboard UI
+
+Create `app/page.tsx`:
+
+```typescript
+import { getAllAgents } from '@/lib/agents';
+import { getRecentLogsAllAgents } from '@/lib/logs';
+import AgentCard from '@/components/AgentCard';
+import LogFeed from '@/components/LogFeed';
+import CostSummary from '@/components/CostSummary';
+
+export const revalidate = 15; // Refresh every 15 seconds
+
+export default async function Dashboard() {
+  const agents = getAllAgents();
+  const logs = getRecentLogsAllAgents(30);
+
+  const totalCostToday = agents.reduce((sum, a) => sum + a.costToday, 0);
+  const totalMessagesToday = agents.reduce((sum, a) => sum + a.messagesToday, 0);
+  const runningCount = agents.filter(a => a.status === 'running').length;
+
+  return (
+    <div className="min-h-screen bg-gray-950 text-white p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">Mission Control</h1>
+          <div className="text-sm text-gray-400">
+            Auto-refreshes every 15s
+          </div>
+        </div>
+
+        {/* Summary bar */}
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="bg-gray-900 rounded-lg p-4">
+            <div className="text-2xl font-bold text-green-400">
+              {runningCount}/{agents.length}
+            </div>
+            <div className="text-gray-400 text-sm">Agents Running</div>
+          </div>
+          <div className="bg-gray-900 rounded-lg p-4">
+            <div className="text-2xl font-bold text-blue-400">
+              {totalMessagesToday.toLocaleString()}
+            </div>
+            <div className="text-gray-400 text-sm">Messages Today</div>
+          </div>
+          <div className="bg-gray-900 rounded-lg p-4">
+            <div className="text-2xl font-bold text-amber-400">
+              ${totalCostToday.toFixed(2)}
+            </div>
+            <div className="text-gray-400 text-sm">Spend Today</div>
+          </div>
+        </div>
+
+        {/* Agent cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+          {agents.map(agent => (
+            <AgentCard key={agent.id} agent={agent} />
+          ))}
+        </div>
+
+        {/* Log feed */}
+        <div className="bg-gray-900 rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">Live Message Log</h2>
+          <LogFeed logs={logs} />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 5: The AgentCard Component
+
+Create `components/AgentCard.tsx`:
+
+```typescript
+import { AgentStatus } from '@/lib/agents';
+import { formatDistanceToNow } from 'date-fns';
+
+const statusColors = {
+  running: 'bg-green-500',
+  stale: 'bg-yellow-500',
+  offline: 'bg-red-500',
+};
+
+const statusLabels = {
+  running: 'Running',
+  stale: 'Stale (>1min)',
+  offline: 'Offline',
+};
+
+export default function AgentCard({ agent }: { agent: AgentStatus }) {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-lg capitalize">{agent.id}</h3>
+        <span className={`flex items-center gap-1.5 text-xs font-medium`}>
+          <span className={`w-2 h-2 rounded-full ${statusColors[agent.status]}`} />
+          {statusLabels[agent.status]}
+        </span>
+      </div>
+
+      <div className="space-y-1 text-sm text-gray-400">
+        <div className="flex justify-between">
+          <span>Last heartbeat</span>
+          <span className="text-white">
+            {agent.lastBeat
+              ? formatDistanceToNow(agent.lastBeat, { addSuffix: true })
+              : 'Never'
+            }
+          </span>
+        </div>
+        <div className="flex justify-between">
+          <span>Uptime</span>
+          <span className="text-white">{agent.uptimeStr}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Messages today</span>
+          <span className="text-white">{agent.messagesToday}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Cost today</span>
+          <span className="text-amber-400">${agent.costToday.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Tokens today</span>
+          <span className="text-white">{agent.tokensToday.toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Step 6: Add Auto-Refresh
+
+For a dashboard that actually updates without page refresh, use React's `useRouter` with an interval:
+
+```typescript
+// app/layout.tsx - Add this to a client component wrapper
+'use client';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+
+export function AutoRefresh({ intervalMs = 15000 }: { intervalMs?: number }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, intervalMs);
+
+    return () => clearInterval(interval);
+  }, [router, intervalMs]);
+
+  return null;
+}
+```
+
+Add `<AutoRefresh />` to your layout's body, and Next.js will re-fetch the server data every 15 seconds without a full page reload.
+
+## Step 7: Cost Tracking Over Time
+
+For monthly cost tracking, have your agents write a `costs.json` file alongside the heartbeat. A simple structure:
+
+```json
+{
+  "2026-01-22": {
+    "tokens_input": 28000,
+    "tokens_output": 10291,
+    "cost_usd": 0.82,
+    "messages": 47
+  },
+  "2026-01-21": {
+    "tokens_input": 31200,
+    "tokens_output": 11800,
+    "cost_usd": 0.94,
+    "messages": 52
+  }
+}
+```
+
+Read this in `lib/costs.ts` and render a simple bar chart using just CSS:
+
+```typescript
+export function getMonthlySpend(agentId: string): number {
+  const costsPath = path.join(WORKSPACE, 'agents', agentId, 'logs', 'costs.json');
+  if (!fs.existsSync(costsPath)) return 0;
+
+  const costs = JSON.parse(fs.readFileSync(costsPath, 'utf-8'));
+  const thisMonth = new Date().toISOString().slice(0, 7); // "2026-01"
+
+  return Object.entries(costs)
+    .filter(([date]) => date.startsWith(thisMonth))
+    .reduce((sum, [, data]: [string, any]) => sum + data.cost_usd, 0);
+}
+```
+
+## Deploying the Dashboard
+
+The dashboard uses filesystem access, so it can't be deployed to Vercel or similar hosts. Run it locally on the same machine as your workspace:
+
+```bash
+npm run build
+PORT=4000 npm start
+```
+
+Access it at `http://localhost:4000`. For remote access, use a SSH tunnel:
+
+```bash
+# On your remote machine:
+ssh -L 4000:localhost:4000 user@your-server.com
+# Then access http://localhost:4000 locally
+```
+
+Or set up Tailscale for a VPN that makes your dashboard accessible from anywhere.
+
+## What to Build Next
+
+Once you have the basics working, consider adding:
+
+- **Email alerts** when an agent goes offline (use Nodemailer or Resend)
+- **Slack/Discord notifications** for daily cost summaries
+- **Memory editor**: View and edit agent memory files directly in the dashboard
+- **Prompt testing**: Send test messages to agents from the dashboard
+
+A good dashboard dramatically reduces the time you spend wondering "is my agent working?" — you'll know at a glance.
