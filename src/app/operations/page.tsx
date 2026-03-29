@@ -119,18 +119,18 @@ export default function OperationsPage() {
           transform: translateY(30px);
           transition: opacity 0.6s ease-out, transform 0.6s ease-out;
         }
-        .ops-visible .ops-reveal {
+        .ops-reveal.ops-visible {
           opacity: 1;
           transform: translateY(0);
         }
-        .ops-visible .ops-reveal:nth-child(2) { transition-delay: 0.1s; }
-        .ops-visible .ops-reveal:nth-child(3) { transition-delay: 0.2s; }
-        .ops-visible .ops-reveal:nth-child(4) { transition-delay: 0.3s; }
-        .ops-visible .ops-reveal:nth-child(5) { transition-delay: 0.35s; }
-        .ops-visible .ops-reveal:nth-child(6) { transition-delay: 0.4s; }
-        .ops-visible .ops-reveal:nth-child(7) { transition-delay: 0.45s; }
-        .ops-visible .ops-reveal:nth-child(8) { transition-delay: 0.5s; }
-        .ops-visible .ops-reveal:nth-child(9) { transition-delay: 0.55s; }
+        .ops-reveal.ops-visible:nth-child(2) { transition-delay: 0.1s; }
+        .ops-reveal.ops-visible:nth-child(3) { transition-delay: 0.2s; }
+        .ops-reveal.ops-visible:nth-child(4) { transition-delay: 0.3s; }
+        .ops-reveal.ops-visible:nth-child(5) { transition-delay: 0.35s; }
+        .ops-reveal.ops-visible:nth-child(6) { transition-delay: 0.4s; }
+        .ops-reveal.ops-visible:nth-child(7) { transition-delay: 0.45s; }
+        .ops-reveal.ops-visible:nth-child(8) { transition-delay: 0.5s; }
+        .ops-reveal.ops-visible:nth-child(9) { transition-delay: 0.55s; }
       `}</style>
 
       {/* ═══════════ HERO ═══════════ */}
