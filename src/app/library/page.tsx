@@ -21,6 +21,8 @@ const books = [
     words: "47,000+",
     chapters: 18,
     audience: "Builders & Developers",
+    buyUrl: "https://daveperham.gumroad.com/l/zvkfr",
+    price: "$14.99",
     pitch:
       "The field manual. Set up your first AI agent in under an hour, build a multi-agent team with specialized roles, connect to every channel, and start monetizing. Real code, real configs, real numbers.",
     highlights: [
@@ -39,6 +41,8 @@ const books = [
     words: "71,000+",
     chapters: 20,
     audience: "Power Users & Operators",
+    buyUrl: "https://daveperham.gumroad.com/l/ryzfh",
+    price: "$14.99",
     pitch:
       "The cookbook. Advanced agent configuration, model selection strategy, memory architecture, custom skills, orchestration patterns, and cost optimization. You'll build while you read.",
     highlights: [
@@ -57,6 +61,8 @@ const books = [
     words: "53,000+",
     chapters: 20,
     audience: "Entrepreneurs & Side-Hustlers",
+    buyUrl: "https://daveperham.gumroad.com/l/osyoww",
+    price: "$14.99",
     pitch:
       "The business plan. Seven income streams you can build with AI agents, with real costs, real revenue projections, and step-by-step playbooks. Your agents should pay for themselves.",
     highlights: [
@@ -75,6 +81,8 @@ const books = [
     words: "60,000+",
     chapters: 20,
     audience: "Business Owners & Managers",
+    buyUrl: "https://daveperham.gumroad.com/l/hwlvxz",
+    price: "$14.99",
     pitch:
       "The executive brief. Written for dentists, realtors, e-commerce owners, and consultants — not developers. Zero jargon, pure ROI. You don't need a tech team. You need this book and an afternoon.",
     highlights: [
@@ -237,14 +245,17 @@ export default function LibraryPage() {
                   <span>PDF + EPUB</span>
                 </div>
 
-                {/* CTA placeholder */}
-                <div className="flex gap-3">
-                  <span
-                    className="inline-block font-semibold px-6 py-3 rounded-xl text-white text-sm cursor-default"
+                {/* Buy button */}
+                <div className="flex gap-3 items-center">
+                  <a
+                    href={book.buyUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block font-semibold px-6 py-3 rounded-xl text-white text-sm hover:opacity-90 transition-opacity"
                     style={{ background: book.color }}
                   >
-                    Coming Soon
-                  </span>
+                    Get it on Gumroad — {book.price}
+                  </a>
                 </div>
               </div>
             </div>
@@ -264,9 +275,15 @@ export default function LibraryPage() {
           <p className="text-gray-500 text-sm mb-8">
             Whether you&apos;re a developer, entrepreneur, or business owner — there&apos;s a book for you.
           </p>
-          <span className="inline-block bg-amber-500 text-white font-semibold px-8 py-3.5 rounded-xl text-lg cursor-default">
-            Bundle Coming Soon
-          </span>
+          <a
+            href="https://daveperham.gumroad.com/l/llftyx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block bg-amber-500 hover:bg-amber-400 text-white font-semibold px-8 py-3.5 rounded-xl text-lg transition-colors"
+          >
+            Get the Bundle — $39.99
+          </a>
+          <p className="text-gray-600 text-sm mt-3">Save 33% vs. buying individually</p>
         </div>
       </section>
     </>
