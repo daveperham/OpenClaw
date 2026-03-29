@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Metadata } from "next";
 import ArticleCard from "@/components/ArticleCard";
 import NewsletterCTA from "@/components/NewsletterCTA";
@@ -114,6 +115,48 @@ export default function HomePage() {
                 </p>
               </Link>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Library Teaser */}
+      <section className="py-16 px-4 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col lg:flex-row items-center gap-12">
+            <div className="flex-1">
+              <div className="inline-flex items-center gap-2 bg-amber-500/20 text-amber-400 text-sm font-medium px-3 py-1 rounded-full mb-4">
+                <span>📚</span> New
+              </div>
+              <h2 className="text-3xl font-extrabold mb-4">
+                Go deeper with <span className="text-amber-400">The Library</span>
+              </h2>
+              <p className="text-gray-400 leading-relaxed mb-6">
+                Four books covering everything from your first AI agent to a full autonomous revenue operation. 232,000+ words of practical, battle-tested guidance.
+              </p>
+              <Link
+                href="/library"
+                className="inline-block bg-amber-500 hover:bg-amber-400 text-white font-semibold px-6 py-3 rounded-xl transition-colors"
+              >
+                Browse the Library →
+              </Link>
+            </div>
+            <div className="flex gap-4">
+              {[
+                { src: "/images/books/ai-agent-blueprint.png", alt: "AI Agent Blueprint" },
+                { src: "/images/books/openclaw-playbook.png", alt: "OpenClaw Playbook" },
+                { src: "/images/books/ai-revenue-machine.png", alt: "AI Revenue Machine" },
+                { src: "/images/books/ai-agents-business.png", alt: "AI Agents for Business" },
+              ].map((book, i) => (
+                <Link key={book.alt} href="/library" className="group">
+                  <div
+                    className="relative w-[100px] h-[134px] rounded shadow-lg overflow-hidden border border-white/10 transition-transform duration-300 group-hover:scale-110 group-hover:-translate-y-1"
+                    style={{ transform: `rotate(${-3 + i * 2}deg)` }}
+                  >
+                    <Image src={book.src} alt={book.alt} fill className="object-cover" />
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </section>

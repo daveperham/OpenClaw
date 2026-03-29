@@ -70,6 +70,13 @@ export default function Navbar() {
             </div>
 
             <Link
+              href="/library"
+              className="text-gray-600 hover:text-amber-500 font-medium transition-colors"
+            >
+              Library
+            </Link>
+
+            <Link
               href="/about"
               className="text-gray-600 hover:text-amber-500 font-medium transition-colors"
             >
@@ -141,6 +148,13 @@ export default function Navbar() {
                 </Link>
               ))}
             </div>
+            <Link
+              href="/library"
+              onClick={() => setMobileOpen(false)}
+              className="block px-2 py-2 text-gray-700 hover:text-amber-500 font-medium"
+            >
+              Library
+            </Link>
             <Link
               href="/about"
               onClick={() => setMobileOpen(false)}
