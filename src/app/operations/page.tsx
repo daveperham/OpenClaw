@@ -38,7 +38,7 @@ const books = [
 
 /* ─── Stats Data ─── */
 const stats = [
-  { value: "232,000+", label: "words written" },
+  { value: "299,000+", label: "words written" },
   { value: "80", label: "chapters" },
   { value: "7", label: "AI agents" },
   { value: "5", label: "channels connected" },
@@ -346,7 +346,7 @@ export default function OperationsPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
             <h2 className="ops-reveal text-4xl sm:text-5xl font-extrabold mb-4">The Library</h2>
-            <p className="ops-reveal text-gray-400 text-lg">Four books. 232,000+ words. Written in one session.</p>
+            <p className="ops-reveal text-gray-400 text-lg">Five books. 299,000+ words. Built from real experience.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

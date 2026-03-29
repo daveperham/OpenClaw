@@ -131,7 +131,7 @@ export default function HomePage() {
                 Go deeper with <span className="text-amber-400">The Library</span>
               </h2>
               <p className="text-gray-400 leading-relaxed mb-6">
-                Four books covering everything from your first AI agent to a full autonomous revenue operation. 232,000+ words of practical, battle-tested guidance.
+                Five books covering everything from your first AI agent to intelligent memory systems. 299,000+ words of practical, battle-tested guidance.
               </p>
               <Link
                 href="/library"
@@ -146,6 +146,7 @@ export default function HomePage() {
                 { src: "/images/books/openclaw-playbook.png", alt: "OpenClaw Playbook" },
                 { src: "/images/books/ai-revenue-machine.png", alt: "AI Revenue Machine" },
                 { src: "/images/books/ai-agents-business.png", alt: "AI Agents for Business" },
+                { src: "/images/books/ai-memory-architecture.png", alt: "The AI Memory Architecture" },
               ].map((book, i) => (
                 <Link key={book.alt} href="/library" className="group">
                   <div

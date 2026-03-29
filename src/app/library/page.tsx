@@ -5,7 +5,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "The Library — Books by David Perham | TheClawTips",
   description:
-    "Four books on AI agents — from your first setup to a full revenue operation. 232,000+ words of practical, no-BS guidance. Written by a human, powered by AI.",
+    "Five books on AI agents — from your first setup to a full revenue operation. 299,000+ words of practical, no-BS guidance. Written by a human, powered by AI.",
   alternates: {
     canonical: "https://theclawtips.com/library",
   },
@@ -92,6 +92,26 @@ const books = [
       "Vendor comparison across 6 categories",
     ],
   },
+  {
+    slug: "ai-memory-architecture",
+    title: "The AI Memory Architecture",
+    subtitle: "How to Give Your AI Agents Persistent, Intelligent Memory",
+    cover: "/images/books/ai-memory-architecture.png",
+    color: "#e879f9",
+    words: "66,000+",
+    chapters: 20,
+    audience: "AI Engineers & Architects",
+    buyUrl: "https://daveperham.gumroad.com/l/wnbdn",
+    price: "$14.99",
+    pitch:
+      "The deep dive. Why every current memory solution falls short, and how to build one that doesn't. Complete source code for a production memory engine with tiered storage, semantic search, temporal entities, and auto-consolidation.",
+    highlights: [
+      "Complete memory engine source code",
+      "Semantic vector search (local, no API)",
+      "Temporal entity graph",
+      "Auto Dream vs Mem0 vs Zep vs Letta analysis",
+    ],
+  },
 ];
 
 export default function LibraryPage() {
@@ -110,7 +130,7 @@ export default function LibraryPage() {
         />
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-amber-500/20 text-amber-400 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-            <span>📚</span> 232,000+ words across 4 books
+            <span>📚</span> 299,000+ words across 5 books
           </div>
           <h1 className="text-5xl sm:text-6xl font-extrabold mb-6 leading-tight">
             The <span className="text-amber-400">Library</span>
@@ -267,10 +287,10 @@ export default function LibraryPage() {
       <section className="py-16 px-4 bg-gradient-to-b from-gray-900 to-gray-800 text-white">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl font-extrabold mb-4">
-            Want all four?
+            Want all five?
           </h2>
           <p className="text-gray-400 text-lg mb-3">
-            The complete library — 232,000+ words, 80 chapters, zero filler.
+            The complete library — 299,000+ words, 100 chapters, zero filler.
           </p>
           <p className="text-gray-500 text-sm mb-8">
             Whether you&apos;re a developer, entrepreneur, or business owner — there&apos;s a book for you.
@@ -281,7 +301,7 @@ export default function LibraryPage() {
             rel="noopener noreferrer"
             className="inline-block bg-amber-500 hover:bg-amber-400 text-white font-semibold px-8 py-3.5 rounded-xl text-lg transition-colors"
           >
-            Get the Bundle — $39.99
+            Get the Bundle — $49.99
           </a>
           <p className="text-gray-600 text-sm mt-3">Save 33% vs. buying individually</p>
         </div>
